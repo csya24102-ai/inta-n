@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="インターン選考管理">
+  <rect width="512" height="512" rx="96" fill="#2563eb"/>
+  <path d="M146 136h220c18 0 32 14 32 32v176c0 18-14 32-32 32H146c-18 0-32-14-32-32V168c0-18 14-32 32-32Z" fill="#fff" opacity=".98"/>
+  <path d="M170 198h172M170 250h172M170 302h102" stroke="#2563eb" stroke-width="26" stroke-linecap="round"/>
+  <circle cx="365" cy="302" r="45" fill="#16a34a"/>
+  <path d="m344 302 14 14 30-32" fill="none" stroke="#fff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
