@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#2563eb" />
-  <meta name="description" content="企業の選考状況・マイページURL・認証情報を端末内で管理するPWA" />
+  <meta name="description" content="企業の選考状況・複数の締切・インターン日時・認証情報を端末内で管理するPWA" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="styles.css" />
@@ -18,24 +18,41 @@
     </div>
     <div class="header-actions">
       <span id="networkStatus" class="network-status" aria-live="polite">確認中</span>
-      <button id="installButton" class="button secondary" type="button" hidden>アプリをインストール</button>
-      <button id="unlockButton" class="button dark" type="button">認証情報をロック解除</button>
+      <button id="installButton" class="button secondary" type="button" hidden>
+        アプリをインストール
+      </button>
+      <button id="unlockButton" class="button dark" type="button">
+        認証情報をロック解除
+      </button>
     </div>
   </header>
 
   <main class="layout">
     <section class="card lookup-card" aria-labelledby="lookupTitle">
       <div>
-        <p class="eyebrow">MY PAGE LOOKUP</p>
+        <p class="eyebrow">COMPANY SITE LOOKUP</p>
         <h2 id="lookupTitle">企業の公式サイト・マイページを開く</h2>
-        <p class="muted">登録済みなら企業マイページを開きます。未登録なら、社名から公式サイトを検索します。</p>
+        <p class="muted">
+          登録済みかつマイページURLがある企業はそのURLを開きます。未登録またはURL未登録なら「社名 公式サイト」の検索結果を開きます。
+        </p>
       </div>
+
       <div class="lookup-row">
         <label class="sr-only" for="lookupCompany">社名</label>
-        <input id="lookupCompany" type="search" placeholder="例：株式会社サンプル" autocomplete="off" />
-        <button id="lookupButton" class="button primary" type="button">サイトを開く</button>
+        <input
+          id="lookupCompany"
+          type="search"
+          placeholder="例：株式会社サンプル"
+          autocomplete="off"
+        />
+        <button id="lookupButton" class="button primary" type="button">
+          サイトを開く
+        </button>
       </div>
-      <div id="lookupResult" class="lookup-result" aria-live="polite">社名を入力して「サイトを開く」を押してください。</div>
+
+      <div id="lookupResult" class="lookup-result" aria-live="polite">
+        社名を入力して「サイトを開く」を押してください。
+      </div>
     </section>
 
     <section class="grid">
@@ -45,76 +62,132 @@
             <p class="eyebrow">ENTRY FORM</p>
             <h2 id="formTitle">企業を登録</h2>
           </div>
-          <button id="resetButton" class="text-button" type="button">入力をリセット</button>
+          <button id="resetButton" class="text-button" type="button">
+            入力をリセット
+          </button>
         </div>
 
         <form id="entryForm" novalidate>
           <input id="entryId" type="hidden" />
 
-          <div class="two-columns">
-            <div class="field">
-              <label for="companyName">社名 <span>*</span></label>
-              <input id="companyName" type="text" required maxlength="100" placeholder="例：株式会社サンプル" autocomplete="organization" />
-            </div>
-            <div class="field">
-              <label for="graduationYear">卒業年度 <span>*</span></label>
-              <select id="graduationYear" required></select>
-            </div>
+          <div class="field">
+            <label for="companyName">社名 <span>*</span></label>
+            <input
+              id="companyName"
+              type="text"
+              required
+              maxlength="100"
+              placeholder="例：株式会社サンプル"
+            />
+            <small>社名だけ入力すれば登録できます。ほかの項目は未定のままでも保存できます。</small>
           </div>
 
           <div class="two-columns">
             <div class="field">
-              <label for="selectionStatus">選考状況 <span>*</span></label>
-              <select id="selectionStatus" required></select>
+              <label for="selectionStatus">選考状況</label>
+              <select id="selectionStatus"></select>
             </div>
+
             <div class="field">
-              <label for="preference">希望度 <span>*</span></label>
-              <select id="preference" required></select>
+              <label for="preference">希望度</label>
+              <select id="preference"></select>
             </div>
           </div>
 
-          <div class="two-columns">
-            <div class="field">
-              <label for="deadline">締め切り</label>
-              <input id="deadline" type="datetime-local" />
+          <fieldset class="deadline-box">
+            <div class="fieldset-title-row">
+              <div>
+                <legend>締め切り</legend>
+                <p class="muted">ES、Webテスト、適性検査などの締め切りを複数登録できます。日時が未定なら空欄のまま残せます。</p>
+              </div>
+              <button id="addDeadlineButton" class="button secondary compact" type="button">
+                締切を追加
+              </button>
             </div>
-            <div class="field">
-              <label for="interviewAt">面接日時</label>
-              <input id="interviewAt" type="datetime-local" />
-            </div>
+            <div id="deadlineItems" class="deadline-items"></div>
+          </fieldset>
+
+          <div class="field">
+            <label for="internshipAt">インターン日時</label>
+            <input id="internshipAt" type="datetime-local" />
+            <small>開催日時が未定の場合は空欄のまま保存できます。</small>
           </div>
 
           <div class="field">
             <label for="mypageUrl">企業マイページURL</label>
-            <input id="mypageUrl" type="url" maxlength="2048" placeholder="https://example.com/mypage" inputmode="url" />
-            <small>URLは1企業につき1件です。企業名だけからURLを自動検索する機能はありません。</small>
+            <input
+              id="mypageUrl"
+              type="url"
+              maxlength="2048"
+              placeholder="https://example.com/mypage"
+            />
+            <small>URLは1企業につき1件です。登録していない企業は公式サイト検索を開きます。</small>
           </div>
 
           <fieldset class="credential-box">
             <legend>サイトに入るための認証情報</legend>
-            <p id="lockMessage" class="muted">認証情報はロック中です。入力するにはロックを解除してください。</p>
+
+            <p id="lockMessage" class="muted">
+              認証情報はロック中です。入力するにはロックを解除してください。
+            </p>
+
             <div class="field">
               <label for="loginId">ID</label>
-              <input id="loginId" type="text" maxlength="254" placeholder="メールアドレスなど" autocomplete="username" disabled />
+              <input
+                id="loginId"
+                type="text"
+                maxlength="254"
+                placeholder="メールアドレスなど"
+                disabled
+              />
             </div>
+
             <div class="field">
               <label for="sitePassword">パスワード</label>
               <div class="password-row">
-                <input id="sitePassword" type="password" maxlength="256" placeholder="パスワード" autocomplete="new-password" disabled />
-                <button id="togglePasswordButton" class="button secondary" type="button" disabled>表示</button>
+                <input
+                  id="sitePassword"
+                  type="password"
+                  maxlength="256"
+                  placeholder="パスワード"
+                  disabled
+                />
+                <button
+                  id="togglePasswordButton"
+                  class="button secondary"
+                  type="button"
+                  disabled
+                >
+                  表示
+                </button>
               </div>
             </div>
           </fieldset>
 
           <div class="field">
             <label for="memo">メモ</label>
-            <textarea id="memo" rows="3" maxlength="1000" placeholder="提出物、面接内容、連絡事項など"></textarea>
+            <textarea
+              id="memo"
+              rows="3"
+              maxlength="1000"
+              placeholder="提出物、面接内容、連絡事項など"
+            ></textarea>
           </div>
 
           <div class="form-actions">
-            <button id="saveButton" class="button primary" type="submit">登録する</button>
-            <button id="cancelEditButton" class="button secondary" type="button" hidden>編集をやめる</button>
+            <button id="saveButton" class="button primary" type="submit">
+              登録する
+            </button>
+            <button
+              id="cancelEditButton"
+              class="button secondary"
+              type="button"
+              hidden
+            >
+              編集をやめる
+            </button>
           </div>
+
           <p id="formMessage" class="form-message" aria-live="polite"></p>
         </form>
       </section>
@@ -125,7 +198,9 @@
             <p class="eyebrow">COMPANY LIST</p>
             <h2 id="listTitle">登録済み企業</h2>
           </div>
-          <label class="filter-label" for="filterText">絞り込み
+
+          <label class="filter-label" for="filterText">
+            絞り込み
             <input id="filterText" type="search" placeholder="社名で検索" />
           </label>
         </div>
@@ -134,11 +209,11 @@
           <table>
             <thead>
               <tr>
-                <th>社名 / 年度</th>
+                <th>社名</th>
                 <th>選考状況</th>
                 <th>希望度</th>
                 <th>締め切り</th>
-                <th>面接日時</th>
+                <th>インターン日時</th>
                 <th>マイページ</th>
                 <th>認証情報</th>
                 <th>操作</th>
@@ -147,7 +222,10 @@
             <tbody id="entryTableBody"></tbody>
           </table>
         </div>
-        <p id="emptyMessage" class="empty-message">まだ企業が登録されていません。</p>
+
+        <p id="emptyMessage" class="empty-message">
+          まだ企業が登録されていません。
+        </p>
       </section>
     </section>
   </main>
@@ -157,19 +235,28 @@
       <p class="eyebrow">SECURE STORAGE</p>
       <h2 id="masterTitle">認証情報を保護</h2>
       <p id="masterDescription" class="muted"></p>
+
       <div class="field">
         <label for="masterPassword">アプリ用パスワード</label>
-        <input id="masterPassword" type="password" minlength="8" required autocomplete="current-password" />
+        <input id="masterPassword" type="password" minlength="8" required />
       </div>
+
       <div id="masterConfirmArea" class="field">
         <label for="masterPasswordConfirm">アプリ用パスワード（確認）</label>
-        <input id="masterPasswordConfirm" type="password" minlength="8" autocomplete="new-password" />
+        <input id="masterPasswordConfirm" type="password" minlength="8" />
       </div>
+
       <p id="masterError" class="form-message" aria-live="polite"></p>
+
       <div class="dialog-actions">
-        <button id="masterSubmit" class="button primary" type="submit">設定して続ける</button>
+        <button id="masterSubmit" class="button primary" type="submit">
+          設定して続ける
+        </button>
       </div>
-      <p class="muted small">アプリ用パスワードを忘れると、保存済みのID・パスワードは復元できません。</p>
+
+      <p class="muted small">
+        アプリ用パスワードを忘れると、保存済みのID・パスワードは復元できません。
+      </p>
     </form>
   </dialog>
 
@@ -177,6 +264,7 @@
     <form id="deleteForm" method="dialog">
       <h2>削除の確認</h2>
       <p class="muted">この企業情報を削除しますか？ この操作は取り消せません。</p>
+
       <div class="dialog-actions">
         <button class="button secondary" value="cancel" type="submit">キャンセル</button>
         <button class="button danger" value="delete" type="submit">削除する</button>
@@ -185,6 +273,7 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
   <script src="app.js" defer></script>
 </body>
 </html>
