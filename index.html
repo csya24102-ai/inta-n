@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#2563eb" />
   <meta name="description" content="企業の選考状況・複数の締切・インターン日時・認証情報を端末内で管理するPWA" />
-  <link rel="manifest" href="manifest.webmanifest?v=6" />
+  <link rel="manifest" href="manifest.webmanifest?v=7" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=6" />
+  <link rel="stylesheet" href="styles.css?v=7" />
   <title>インターン選考管理</title>
 </head>
 <body>
@@ -118,7 +118,7 @@
                 <legend>締め切り</legend>
                 <p class="muted">ES、Webテスト、適性検査などの締め切りを複数登録できます。日時が未定なら空欄のまま残せます。</p>
               </div>
-              <button id="addDeadlineButton" class="button secondary compact" type="button" onclick="addDeadlineRow()">
+              <button id="addDeadlineButton" class="button secondary compact" type="button">
                 締切を追加
               </button>
             </div>
@@ -292,6 +292,66 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="app.js?v=6" defer></script>
+  <script>
+    /*
+      締切追加の保険用処理：app.js の更新が途中の場合でも
+      「締切を追加」ボタンと入力行を使えるようにします。
+    */
+    window.addEventListener('DOMContentLoaded', () => {
+      const button = document.getElementById('addDeadlineButton');
+      const container = document.getElementById('deadlineItems');
+
+      if (!button || !container) return;
+
+      const addFallbackDeadlineRow = () => {
+        const row = document.createElement('div');
+        row.className = 'deadline-row';
+        row.dataset.deadlineId = `fallback-${Date.now()}-${Math.random()}`;
+        row.innerHTML = `
+          <div class="field">
+            <label>種類</label>
+            <select class="deadline-type">
+              <option value="">締切種類を選択</option>
+              <option value="ES締切">ES締切</option>
+              <option value="Webテスト締切">Webテスト締切</option>
+              <option value="適性検査締切">適性検査締切</option>
+              <option value="応募締切">応募締切</option>
+              <option value="書類提出締切">書類提出締切</option>
+              <option value="その他">その他</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>締切名（任意）</label>
+            <input class="deadline-label" type="text" maxlength="60" placeholder="例：第1回ES" />
+          </div>
+          <div class="field">
+            <label>締切日時</label>
+            <input class="deadline-date-input" type="datetime-local" />
+          </div>
+          <button class="button secondary compact" type="button" data-action="remove-deadline">削除</button>
+        `;
+        container.append(row);
+      };
+
+      // app.js が初期行を作れていない場合に限り、1行作ります。
+      if (!container.querySelector('.deadline-row')) {
+        addFallbackDeadlineRow();
+      }
+
+      // addEventListenerではなくonclickを使って、古いapp.jsとの二重実行を防ぎます。
+      button.onclick = (event) => {
+        event.preventDefault();
+        addFallbackDeadlineRow();
+      };
+
+      container.addEventListener('click', (event) => {
+        const removeButton = event.target.closest('[data-action="remove-deadline"]');
+        if (removeButton) {
+          removeButton.closest('.deadline-row')?.remove();
+        }
+      });
+    });
+  </script>
+  <script src="app.js?v=7" defer></script>
 </body>
 </html>
