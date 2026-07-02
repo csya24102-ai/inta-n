@@ -1,16 +1,6 @@
 {
   "name": "インターン選考管理",
   "short_name": "選考管理",
-  "description": "企業の選考状況・マイページURL・認証情報を端末内で管理するPWA",
-  "lang": "ja",
-  "start_url": "./",
-  "scope": "./",{
-  "name": "インターン選考管理",
-  "short_name": "選考管理",
-  "description": "企業の選考状況・複数の締切・インターン日時・認証情報を端末内で管理するPWA",
-  "lang": "ja",{
-  "name": "インターン選考管理",
-  "short_name": "選考管理",
   "description": "企業の選考状況・締切・マイページ情報を端末内で管理するPWA",
   "lang": "ja",
   "start_url": "./?v=10",
@@ -25,28 +15,5 @@
       "type": "image/svg+xml",
       "purpose": "any maskable"
     }
-  ]
-}
-
-  "start_url": "./",
-  "scope": "./",
-  "display": "standalone",
-  "background_color": "#f5f7fb",
-  "theme_color": "#2563eb",
-  "icons": [
-    {
-      "src": "icons/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
-  ]
-}
-
-  "display": "standalone",
-  "background_color": "#f5f7fb",
-  "theme_color": "#2563eb",
-  "icons": [
-    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ]
 }
