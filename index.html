@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#2563eb" />
   <meta name="description" content="企業の選考状況・複数の締切・インターン日時・認証情報を端末内で管理するPWA" />
-  <link rel="manifest" href="manifest.webmanifest?v=5" />
+  <link rel="manifest" href="manifest.webmanifest?v=6" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=5" />
+  <link rel="stylesheet" href="styles.css?v=6" />
   <title>インターン選考管理</title>
 </head>
 <body>
@@ -85,12 +85,30 @@
           <div class="two-columns">
             <div class="field">
               <label for="selectionStatus">選考状況</label>
-              <select id="selectionStatus"></select>
+              <select id="selectionStatus">
+                <option value="">未選択</option>
+                <option value="応募予定">応募予定</option>
+                <option value="応募準備中">応募準備中</option>
+                <option value="応募済み">応募済み</option>
+                <option value="書類選考中">書類選考中</option>
+                <option value="面接予定">面接予定</option>
+                <option value="選考中">選考中</option>
+                <option value="合格">合格</option>
+                <option value="不合格">不合格</option>
+                <option value="辞退">辞退</option>
+                <option value="終了">終了</option>
+              </select>
             </div>
 
             <div class="field">
               <label for="preference">希望度</label>
-              <select id="preference"></select>
+              <select id="preference">
+                <option value="">未選択</option>
+                <option value="第一志望">第一志望</option>
+                <option value="高い">高い</option>
+                <option value="普通">普通</option>
+                <option value="低い">低い</option>
+              </select>
             </div>
           </div>
 
@@ -100,7 +118,7 @@
                 <legend>締め切り</legend>
                 <p class="muted">ES、Webテスト、適性検査などの締め切りを複数登録できます。日時が未定なら空欄のまま残せます。</p>
               </div>
-              <button id="addDeadlineButton" class="button secondary compact" type="button">
+              <button id="addDeadlineButton" class="button secondary compact" type="button" onclick="addDeadlineRow()">
                 締切を追加
               </button>
             </div>
@@ -274,6 +292,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <script src="app.js?v=5" defer></script>
+  <script src="app.js?v=6" defer></script>
 </body>
 </html>
