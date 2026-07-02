@@ -4,7 +4,810 @@ const STORAGE_KEY = 'intern-selection-manager.entries.v1';
 const CRYPTO_META_KEY = 'intern-selection-manager.crypto-meta.v1';
 const STATUS_OPTIONS = [
   ['応募予定', '応募予定'], ['応募準備中', '応募準備中'], ['応募済み', '応募済み'],
-  ['書類選考中', '書類選考中'], ['面接予定', '面接予定'], ['選考中', '選考中'],
+  ['書類選考中', '書類選考中'use strict';
+
+const STORAGE_KEY = 'intern-selection-manager.entries.v2';
+const LEGACY_STORAGE_KEY = 'intern-selection-manager.entries.v1';
+const CRYPTO_META_KEY = 'intern-selection-manager.crypto-meta.v1';
+
+const STATUS_OPTIONS = [
+  ['', '未選択'],
+  ['応募予定', '応募予定'],
+  ['応募準備中', '応募準備中'],
+  ['応募済み', '応募済み'],
+  ['書類選考中', '書類選考中'],
+  ['面接予定', '面接予定'],
+  ['選考中', '選考中'],
+  ['合格', '合格'],
+  ['不合格', '不合格'],
+  ['辞退', '辞退'],
+  ['終了', '終了']
+];
+
+const PREFERENCE_OPTIONS = [
+  ['', '未選択'],
+  ['第一志望', '第一志望'],
+  ['高い', '高い'],
+  ['普通', '普通'],
+  ['低い', '低い']
+];
+
+const DEADLINE_TYPE_OPTIONS = [
+  ['', '締切種類を選択'],
+  ['ES締切', 'ES締切'],
+  ['Webテスト締切', 'Webテスト締切'],
+  ['適性検査締切', '適性検査締切'],
+  ['応募締切', '応募締切'],
+  ['書類提出締切', '書類提出締切'],
+  ['その他', 'その他']
+];
+
+const $ = (id) => document.getElementById(id);
+
+const state = {
+  entries: [],
+  cryptoKey: null,
+  deferredPrompt: null,
+  deleteId: null,
+  toastTimer: null
+};
+
+function escapeHtml(text = '') {
+  return String(text)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function uuid() {
+  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+    return window.crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random()}`;
+}
+
+function normalize(name) {
+  return String(name || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLocaleLowerCase('ja-JP');
+}
+
+function toBase64(bytes) {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function fromBase64(value) {
+  return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+}
+
+function normalizeDeadlineItem(item = {}) {
+  return {
+    id: item.id || uuid(),
+    type: String(item.type || ''),
+    label: String(item.label || ''),
+    dueAt: String(item.dueAt || '')
+  };
+}
+
+function normalizeEntry(entry = {}) {
+  const oldDeadlineItems = Array.isArray(entry.deadlineItems)
+    ? entry.deadlineItems.map(normalizeDeadlineItem)
+    : entry.deadline
+      ? [normalizeDeadlineItem({ type: '締切', dueAt: entry.deadline })]
+      : [];
+
+  const companyName = String(entry.companyName || '').trim();
+
+  return {
+    id: entry.id || uuid(),
+    companyName,
+    companyNormalized: normalize(companyName || entry.companyNormalized),
+    selectionStatus: String(entry.selectionStatus || ''),
+    preference: String(entry.preference || ''),
+    deadlineItems: oldDeadlineItems,
+    internshipAt: String(entry.internshipAt || ''),
+    mypageUrl: String(entry.mypageUrl || ''),
+    memo: String(entry.memo || ''),
+    credentialsEnc: entry.credentialsEnc || null,
+    createdAt: entry.createdAt || new Date().toISOString(),
+    updatedAt: entry.updatedAt || entry.createdAt || new Date().toISOString()
+  };
+}
+
+function readEntries() {
+  try {
+    const current = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (Array.isArray(current)) {
+      return current.map(normalizeEntry);
+    }
+
+    const legacy = JSON.parse(localStorage.getItem(LEGACY_STORAGE_KEY));
+    if (Array.isArray(legacy)) {
+      const migrated = legacy.map(normalizeEntry);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+      return migrated;
+    }
+  } catch {
+    return [];
+  }
+
+  return [];
+}
+
+function writeEntries() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.entries));
+}
+
+function getCryptoMeta() {
+  try {
+    return JSON.parse(localStorage.getItem(CRYPTO_META_KEY));
+  } catch {
+    return null;
+  }
+}
+
+function showToast(message) {
+  const toast = $('toast');
+  toast.textContent = message;
+  toast.classList.add('show');
+  clearTimeout(state.toastTimer);
+  state.toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+function fillSelect(selectId, options) {
+  const select = $(selectId);
+  if (!select) {
+    throw new Error(`選択欄 #${selectId} が見つかりません。index.html と app.js を同じ更新版にしてください。`);
+  }
+
+  select.innerHTML = options
+    .map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`)
+    .join('');
+}
+
+function setupSelects() {
+  fillSelect('selectionStatus', STATUS_OPTIONS);
+  fillSelect('preference', PREFERENCE_OPTIONS);
+}
+
+function deadlineTypeOptionsHtml(selectedValue = '') {
+  return DEADLINE_TYPE_OPTIONS
+    .map(([value, label]) => {
+      const selected = value === selectedValue ? ' selected' : '';
+      return `<option value="${escapeHtml(value)}"${selected}>${escapeHtml(label)}</option>`;
+    })
+    .join('');
+}
+
+function addDeadlineRow(item = {}) {
+  const deadline = normalizeDeadlineItem(item);
+  const row = document.createElement('div');
+  row.className = 'deadline-row';
+  row.dataset.deadlineId = deadline.id;
+  row.innerHTML = `
+    <div class="field">
+      <label>種類</label>
+      <select class="deadline-type">${deadlineTypeOptionsHtml(deadline.type)}</select>
+    </div>
+    <div class="field">
+      <label>締切名（任意）</label>
+      <input class="deadline-label" type="text" maxlength="60" placeholder="例：第1回ES" value="${escapeHtml(deadline.label)}" />
+    </div>
+    <div class="field">
+      <label>締切日時</label>
+      <input class="deadline-date-input" type="datetime-local" value="${escapeHtml(toLocalInputValue(deadline.dueAt))}" />
+    </div>
+    <button class="button secondary compact" type="button" data-action="remove-deadline">削除</button>
+  `;
+  $('deadlineItems').append(row);
+}
+
+function getDeadlineItemsFromForm() {
+  return [...$('deadlineItems').querySelectorAll('.deadline-row')]
+    .map((row) => ({
+      id: row.dataset.deadlineId || uuid(),
+      type: row.querySelector('.deadline-type').value,
+      label: row.querySelector('.deadline-label').value.trim(),
+      dueAt: row.querySelector('.deadline-date-input').value
+        ? new Date(row.querySelector('.deadline-date-input').value).toISOString()
+        : ''
+    }))
+    .filter((item) => item.type || item.label || item.dueAt);
+}
+
+function toLocalInputValue(value) {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 16);
+}
+
+async function deriveKey(masterPassword, salt, iterations) {
+  const material = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(masterPassword),
+    'PBKDF2',
+    false,
+    ['deriveKey']
+  );
+
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: fromBase64(salt),
+      iterations,
+      hash: 'SHA-256'
+    },
+    material,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptText(text, key = state.cryptoKey) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    new TextEncoder().encode(text)
+  );
+
+  return {
+    iv: toBase64(iv),
+    data: toBase64(new Uint8Array(encrypted))
+  };
+}
+
+async function decryptText(payload, key = state.cryptoKey) {
+  const data = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: fromBase64(payload.iv) },
+    key,
+    fromBase64(payload.data)
+  );
+
+  return new TextDecoder().decode(data);
+}
+
+async function createMasterPassword(password) {
+  const salt = toBase64(crypto.getRandomValues(new Uint8Array(16)));
+  const iterations = 250000;
+  const key = await deriveKey(password, salt, iterations);
+  const verifier = await encryptText('intern-selection-manager-verifier-v1', key);
+
+  localStorage.setItem(CRYPTO_META_KEY, JSON.stringify({ salt, iterations, verifier }));
+  state.cryptoKey = key;
+}
+
+async function unlockMasterPassword(password) {
+  const meta = getCryptoMeta();
+  if (!meta) {
+    throw new Error('アプリ用パスワードが未設定です。');
+  }
+
+  const key = await deriveKey(password, meta.salt, meta.iterations);
+  const value = await decryptText(meta.verifier, key);
+  if (value !== 'intern-selection-manager-verifier-v1') {
+    throw new Error('wrong password');
+  }
+
+  state.cryptoKey = key;
+}
+
+function isUnlocked() {
+  return Boolean(state.cryptoKey);
+}
+
+function updateLockUi() {
+  const unlocked = isUnlocked();
+  $('loginId').disabled = !unlocked;
+  $('sitePassword').disabled = !unlocked;
+  $('togglePasswordButton').disabled = !unlocked;
+  $('unlockButton').textContent = unlocked ? '認証情報をロック' : '認証情報をロック解除';
+  $('lockMessage').textContent = unlocked
+    ? 'ロック解除中です。ID・パスワードを入力またはコピーできます。'
+    : '認証情報はロック中です。入力するにはロックを解除してください。';
+}
+
+function lockApp() {
+  state.cryptoKey = null;
+  $('loginId').value = '';
+  $('sitePassword').value = '';
+  $('sitePassword').type = 'password';
+  $('togglePasswordButton').textContent = '表示';
+  updateLockUi();
+  showToast('認証情報をロックしました。');
+}
+
+function formatDate(value) {
+  if (!value) {
+    return '<span class="cell-note">未定</span>';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '<span class="cell-note">未定</span>';
+  }
+
+  return escapeHtml(
+    new Intl.DateTimeFormat('ja-JP', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date)
+  );
+}
+
+function deadlineName(item) {
+  return item.label || item.type || '締切';
+}
+
+function formatDeadlines(items = []) {
+  if (!items.length) {
+    return '<span class="cell-note">未設定</span>';
+  }
+
+  return `<ul class="deadline-list">${items
+    .map(
+      (item) => `
+        <li>
+          <span class="deadline-name">${escapeHtml(deadlineName(item))}</span>
+          <span class="deadline-date">${formatDate(item.dueAt)}</span>
+        </li>`
+    )
+    .join('')}</ul>`;
+}
+
+function preferenceClass(value) {
+  return {
+    第一志望: 'first',
+    高い: 'high',
+    低い: 'low',
+    '': 'unset'
+  }[value] || '';
+}
+
+function displayOrUnset(value) {
+  return value || '未設定';
+}
+
+function findExactEntryByCompany(name) {
+  const key = normalize(name);
+  return state.entries.find((entry) => entry.companyNormalized === key) || null;
+}
+
+function renderEntries() {
+  const filter = normalize($('filterText').value || '');
+  const entries = [...state.entries]
+    .filter((entry) => !filter || entry.companyNormalized.includes(filter))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+  $('emptyMessage').hidden = entries.length > 0;
+
+  $('entryTableBody').innerHTML = entries
+    .map((entry) => {
+      const mypage = entry.mypageUrl
+        ? `
+          <a class="table-link" href="${escapeHtml(entry.mypageUrl)}" target="_blank" rel="noopener noreferrer">開く</a>
+          <button class="table-button" data-action="copy-url" data-id="${entry.id}">URLコピー</button>`
+        : '<span class="cell-note">未登録</span>';
+
+      return `
+        <tr>
+          <td><span class="company-name">${escapeHtml(entry.companyName)}</span></td>
+          <td><span class="pill ${entry.selectionStatus ? '' : 'unset'}">${escapeHtml(displayOrUnset(entry.selectionStatus))}</span></td>
+          <td><span class="pill ${preferenceClass(entry.preference)}">${escapeHtml(displayOrUnset(entry.preference))}</span></td>
+          <td>${formatDeadlines(entry.deadlineItems)}</td>
+          <td>${formatDate(entry.internshipAt)}</td>
+          <td><div class="table-actions">${mypage}</div></td>
+          <td>
+            <div class="table-actions">
+              <button class="table-button" data-action="copy-id" data-id="${entry.id}">IDコピー</button>
+              <button class="table-button" data-action="copy-password" data-id="${entry.id}">パスコピー</button>
+            </div>
+          </td>
+          <td>
+            <div class="table-actions">
+              <button class="table-button" data-action="edit" data-id="${entry.id}">編集</button>
+              <button class="table-button danger" data-action="delete" data-id="${entry.id}">削除</button>
+            </div>
+          </td>
+        </tr>`;
+    })
+    .join('');
+}
+
+function openCompanySite() {
+  const companyName = $('lookupCompany').value.trim();
+  const result = $('lookupResult');
+
+  if (!companyName) {
+    result.textContent = '社名を入力してください。';
+    return;
+  }
+
+  const entry = findExactEntryByCompany(companyName);
+  if (entry?.mypageUrl) {
+    window.open(entry.mypageUrl, '_blank', 'noopener');
+    result.textContent = `「${entry.companyName}」の登録済みマイページを新しいタブで開きました。`;
+    return;
+  }
+
+  const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(`${companyName} 公式サイト`)}`;
+  window.open(searchUrl, '_blank', 'noopener');
+  result.textContent = `「${companyName} 公式サイト」の検索結果を新しいタブで開きました。検索結果から公式サイトを確認してください。`;
+}
+
+function resetDeadlineRows(items = []) {
+  $('deadlineItems').innerHTML = '';
+  if (items.length) {
+    items.forEach(addDeadlineRow);
+  } else {
+    addDeadlineRow();
+  }
+}
+
+function resetForm() {
+  $('entryForm').reset();
+  $('entryId').value = '';
+  $('formTitle').textContent = '企業を登録';
+  $('saveButton').textContent = '登録する';
+  $('cancelEditButton').hidden = true;
+  $('formMessage').textContent = '';
+  $('selectionStatus').value = '';
+  $('preference').value = '';
+  $('loginId').value = '';
+  $('sitePassword').value = '';
+  $('sitePassword').type = 'password';
+  $('togglePasswordButton').textContent = '表示';
+  resetDeadlineRows();
+}
+
+async function startEdit(id) {
+  const entry = state.entries.find((item) => item.id === id);
+  if (!entry) {
+    return;
+  }
+
+  $('entryId').value = entry.id;
+  $('companyName').value = entry.companyName;
+  $('selectionStatus').value = entry.selectionStatus;
+  $('preference').value = entry.preference;
+  $('internshipAt').value = toLocalInputValue(entry.internshipAt);
+  $('mypageUrl').value = entry.mypageUrl || '';
+  $('memo').value = entry.memo || '';
+  resetDeadlineRows(entry.deadlineItems || []);
+
+  $('formTitle').textContent = '企業を編集';
+  $('saveButton').textContent = '更新する';
+  $('cancelEditButton').hidden = false;
+  $('formMessage').textContent = '';
+
+  if (isUnlocked() && entry.credentialsEnc) {
+    try {
+      const credentials = JSON.parse(await decryptText(entry.credentialsEnc));
+      $('loginId').value = credentials.loginId || '';
+      $('sitePassword').value = credentials.password || '';
+    } catch {
+      showToast('認証情報を読み取れませんでした。');
+    }
+  } else {
+    $('loginId').value = '';
+    $('sitePassword').value = '';
+  }
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function saveEntry(event) {
+  event.preventDefault();
+  $('formMessage').textContent = '';
+
+  const companyName = $('companyName').value.trim();
+  const mypageUrl = $('mypageUrl').value.trim();
+  const editId = $('entryId').value;
+
+  if (!companyName) {
+    $('formMessage').textContent = '社名は必須です。';
+    return;
+  }
+
+  if (mypageUrl) {
+    try {
+      const url = new URL(mypageUrl);
+      if (!['http:', 'https:'].includes(url.protocol)) {
+        throw new Error('unsupported protocol');
+      }
+    } catch {
+      $('formMessage').textContent = 'マイページURLは http:// または https:// で始まる形式で入力してください。';
+      return;
+    }
+  }
+
+  const companyNormalized = normalize(companyName);
+  const duplicate = state.entries.find(
+    (entry) => entry.id !== editId && entry.companyNormalized === companyNormalized
+  );
+
+  if (duplicate) {
+    $('formMessage').textContent = '同じ社名の企業はすでに登録されています。編集から更新してください。';
+    return;
+  }
+
+  const old = state.entries.find((entry) => entry.id === editId);
+  const now = new Date().toISOString();
+
+  const entry = {
+    id: editId || uuid(),
+    companyName,
+    companyNormalized,
+    selectionStatus: $('selectionStatus').value,
+    preference: $('preference').value,
+    deadlineItems: getDeadlineItemsFromForm(),
+    internshipAt: $('internshipAt').value ? new Date($('internshipAt').value).toISOString() : '',
+    mypageUrl,
+    memo: $('memo').value.trim(),
+    credentialsEnc: old?.credentialsEnc || null,
+    createdAt: old?.createdAt || now,
+    updatedAt: now
+  };
+
+  if (isUnlocked()) {
+    const loginId = $('loginId').value.trim();
+    const password = $('sitePassword').value;
+    entry.credentialsEnc = loginId || password
+      ? await encryptText(JSON.stringify({ loginId, password }))
+      : null;
+  }
+
+  state.entries = old
+    ? state.entries.map((item) => (item.id === entry.id ? entry : item))
+    : [...state.entries, entry];
+
+  writeEntries();
+  resetForm();
+  renderEntries();
+  showToast(old ? '企業情報を更新しました。' : '企業情報を登録しました。');
+}
+
+async function copyText(value, successMessage) {
+  if (!value) {
+    showToast('コピーする情報が登録されていません。');
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(value);
+    showToast(successMessage);
+  } catch {
+    const area = document.createElement('textarea');
+    area.value = value;
+    document.body.append(area);
+    area.select();
+    document.execCommand('copy');
+    area.remove();
+    showToast(successMessage);
+  }
+}
+
+async function handleTableClick(event) {
+  const button = event.target.closest('[data-action]');
+  if (!button) {
+    return;
+  }
+
+  const entry = state.entries.find((item) => item.id === button.dataset.id);
+  if (!entry) {
+    return;
+  }
+
+  const action = button.dataset.action;
+  if (action === 'edit') {
+    return startEdit(entry.id);
+  }
+
+  if (action === 'delete') {
+    state.deleteId = entry.id;
+    $('deleteDialog').showModal();
+    return;
+  }
+
+  if (action === 'copy-url') {
+    return copyText(entry.mypageUrl, 'マイページURLをコピーしました。');
+  }
+
+  if (!isUnlocked()) {
+    showToast('認証情報を使うにはロックを解除してください。');
+    return;
+  }
+
+  try {
+    const credentials = entry.credentialsEnc
+      ? JSON.parse(await decryptText(entry.credentialsEnc))
+      : { loginId: '', password: '' };
+
+    if (action === 'copy-id') {
+      return copyText(credentials.loginId, 'IDをコピーしました。');
+    }
+
+    if (action === 'copy-password') {
+      return copyText(credentials.password, 'パスワードをコピーしました。');
+    }
+  } catch {
+    showToast('認証情報を復号できませんでした。アプリ用パスワードを確認してください。');
+  }
+}
+
+function openMasterDialog() {
+  const hasMeta = Boolean(getCryptoMeta());
+  $('masterPasswordForm').reset();
+  $('masterError').textContent = '';
+  $('masterTitle').textContent = hasMeta ? '認証情報のロック解除' : '認証情報を保護';
+  $('masterDescription').textContent = hasMeta
+    ? 'アプリ用パスワードを入力すると、保存済みのID・パスワードを利用できます。'
+    : 'ID・パスワードを端末内で暗号化保存するため、8文字以上のアプリ用パスワードを設定してください。';
+  $('masterConfirmArea').hidden = hasMeta;
+  $('masterPasswordConfirm').required = !hasMeta;
+  $('masterPassword').autocomplete = hasMeta ? 'current-password' : 'new-password';
+  $('masterSubmit').textContent = hasMeta ? 'ロックを解除する' : '設定して続ける';
+  $('masterPasswordDialog').showModal();
+  setTimeout(() => $('masterPassword').focus(), 0);
+}
+
+async function submitMasterPassword(event) {
+  event.preventDefault();
+  const password = $('masterPassword').value;
+  const confirm = $('masterPasswordConfirm').value;
+  const hasMeta = Boolean(getCryptoMeta());
+
+  if (password.length < 8) {
+    $('masterError').textContent = 'アプリ用パスワードは8文字以上にしてください。';
+    return;
+  }
+
+  if (!hasMeta && password !== confirm) {
+    $('masterError').textContent = '確認用パスワードが一致しません。';
+    return;
+  }
+
+  try {
+    if (hasMeta) {
+      await unlockMasterPassword(password);
+    } else {
+      await createMasterPassword(password);
+    }
+    $('masterPasswordDialog').close();
+    updateLockUi();
+    showToast('認証情報を利用できる状態にしました。');
+  } catch {
+    $('masterError').textContent = 'アプリ用パスワードが正しくありません。';
+  }
+}
+
+function setupPwa() {
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {
+        showToast('オフライン機能を初期化できませんでした。');
+      });
+    });
+  }
+
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault();
+    state.deferredPrompt = event;
+    $('installButton').hidden = false;
+  });
+
+  $('installButton').addEventListener('click', async () => {
+    if (!state.deferredPrompt) {
+      return;
+    }
+    state.deferredPrompt.prompt();
+    await state.deferredPrompt.userChoice;
+    $('installButton').hidden = true;
+    state.deferredPrompt = null;
+  });
+
+  const updateNetworkStatus = () => {
+    $('networkStatus').textContent = navigator.onLine ? 'オンライン' : 'オフライン';
+    $('networkStatus').classList.toggle('offline', !navigator.onLine);
+  };
+
+  window.addEventListener('online', updateNetworkStatus);
+  window.addEventListener('offline', updateNetworkStatus);
+  updateNetworkStatus();
+}
+
+function bindEvents() {
+  $('entryForm').addEventListener('submit', saveEntry);
+  $('resetButton').addEventListener('click', resetForm);
+  $('cancelEditButton').addEventListener('click', resetForm);
+  $('filterText').addEventListener('input', renderEntries);
+  $('lookupButton').addEventListener('click', openCompanySite);
+  $('lookupCompany').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      openCompanySite();
+    }
+  });
+  $('entryTableBody').addEventListener('click', handleTableClick);
+  $('deadlineItems').addEventListener('click', (event) => {
+    if (event.target.closest('[data-action="remove-deadline"]')) {
+      event.target.closest('.deadline-row').remove();
+      if (!$('deadlineItems').children.length) {
+        addDeadlineRow();
+      }
+    }
+  });
+
+  $('unlockButton').addEventListener('click', () => {
+    if (isUnlocked()) {
+      lockApp();
+    } else {
+      openMasterDialog();
+    }
+  });
+
+  $('togglePasswordButton').addEventListener('click', () => {
+    const hidden = $('sitePassword').type === 'password';
+    $('sitePassword').type = hidden ? 'text' : 'password';
+    $('togglePasswordButton').textContent = hidden ? '隠す' : '表示';
+  });
+
+  $('masterPasswordForm').addEventListener('submit', submitMasterPassword);
+
+  $('deleteDialog').addEventListener('close', () => {
+    if ($('deleteDialog').returnValue === 'delete' && state.deleteId) {
+      state.entries = state.entries.filter((entry) => entry.id !== state.deleteId);
+      writeEntries();
+      renderEntries();
+      resetForm();
+      showToast('企業情報を削除しました。');
+    }
+    state.deleteId = null;
+  });
+}
+
+function bootstrap() {
+  try {
+    if (!window.crypto?.subtle) {
+      alert('このブラウザは暗号化機能に対応していません。最新のChrome、Edge、Safari、Firefoxを使用してください。');
+    }
+
+    setupSelects();
+    state.entries = readEntries();
+    bindEvents();
+    updateLockUi();
+    resetForm();
+    renderEntries();
+    setupPwa();
+    document.documentElement.dataset.appReady = 'true';
+  } catch (error) {
+    console.error(error);
+    const message = $('formMessage');
+    if (message) {
+      message.textContent = '画面の初期化に失敗しました。index.html・app.js・sw.js を同じ更新版へ置き換え、ページを再読み込みしてください。';
+    }
+    document.documentElement.dataset.appReady = 'error';
+  }
+}
+
+bootstrap();
+'], ['面接予定', '面接予定'], ['選考中', '選考中'],
   ['合格', '合格'], ['不合格', '不合格'], ['辞退', '辞退'], ['終了', '終了']
 ];
 const PREFERENCE_OPTIONS = [['第一志望', '第一志'use strict';
