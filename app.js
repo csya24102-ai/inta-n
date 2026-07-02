@@ -105,14 +105,41 @@ function renderEntries() {
     </tr>`;
   }).join('');
 }
+function officialSiteSearchUrl(companyName) {
+  const query = `${companyName} 公式サイト`;
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
+function openExternalUrl(url) {
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 function renderLookup() {
-  const name = $('lookupCompany').value.trim(); const result = $('lookupResult');
-  if (!name) { result.textContent = '社名を入力してください。'; return; }
+  const name = $('lookupCompany').value.trim();
+  const result = $('lookupResult');
+
+  if (!name) {
+    result.textContent = '社名を入力してください。';
+    return;
+  }
+
   const matches = findEntriesByCompany(name);
-  if (!matches.length) { result.textContent = '一致する登録企業が見つかりません。社名を確認するか、先に企業を登録してください。'; return; }
-  result.innerHTML = matches.map((entry) => entry.mypageUrl
-    ? `<strong>${escapeHtml(entry.companyName)}（${entry.graduationYear}卒）</strong>： <a href="${escapeHtml(entry.mypageUrl)}" target="_blank" rel="noopener noreferrer">マイページを開く</a>`
-    : `<strong>${escapeHtml(entry.companyName)}（${entry.graduationYear}卒）</strong>： マイページURLは未登録です。`).join('<br>');
+  const entryWithPortalUrl = matches.find((entry) => entry.mypageUrl);
+
+  if (entryWithPortalUrl) {
+    openExternalUrl(entryWithPortalUrl.mypageUrl);
+    result.innerHTML = `<strong>${escapeHtml(entryWithPortalUrl.companyName)}（${entryWithPortalUrl.graduationYear}卒）</strong>の登録済みマイページを新しいタブで開きました。<br><a href="${escapeHtml(entryWithPortalUrl.mypageUrl)}" target="_blank" rel="noopener noreferrer">もう一度マイページを開く</a>`;
+    return;
+  }
+
+  const searchUrl = officialSiteSearchUrl(name);
+  openExternalUrl(searchUrl);
+
+  if (matches.length) {
+    result.innerHTML = `<strong>${escapeHtml(name)}</strong>は登録済みですが、マイページURLが未登録です。<br>公式サイトを探すため、<strong>「${escapeHtml(name)} 公式サイト」</strong>の検索結果を新しいタブで開きました。検索結果から公式サイトを確認し、必要なら企業編集画面にURLを登録してください。`;
+  } else {
+    result.innerHTML = `<strong>${escapeHtml(name)}</strong>は未登録です。<br>公式サイトを探すため、<strong>「${escapeHtml(name)} 公式サイト」</strong>の検索結果を新しいタブで開きました。公式サイトを確認後、マイページURLが分かれば企業登録画面に保存してください。`;
+  }
 }
 
 function resetForm() {
