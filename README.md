@@ -1,4 +1,4 @@
-[README_v10_complete (1).md](https://github.com/user-attachments/files/29834521/README_v10_complete.1.md)
+[README_v10_complete_with_diagrams (1).md](https://github.com/user-attachments/files/29834542/README_v10_complete_with_diagrams.1.md)
 # インターン選考管理 PWA（v10）
 
 大学生が、インターンシップや選考中の企業情報をブラウザ上で整理するための、静的Webアプリです。
@@ -271,7 +271,302 @@ inta-n/
 
 ---
 
-## 10. テスト結果
+## 10. 設計図
+
+このREADMEでは、設計図をMermaid記法で記載しています。GitHubのREADME上では、対応している環境で図として表示されます。
+
+### 10-1. ユースケース図
+
+```mermaid
+flowchart LR
+  user["利用者<br/>大学3年生"]
+
+  subgraph app["インターン選考管理PWA"]
+    uc1["企業情報を登録する"]
+    uc2["企業情報を編集する"]
+    uc3["企業情報を削除する"]
+    uc4["選考状況・希望度を管理する"]
+    uc5["締切を複数管理する"]
+    uc6["インターン日時・面接日時を管理する"]
+    uc7["企業マイページを開く"]
+    uc8["未登録企業の公式サイトを検索する"]
+    uc9["認証情報をロック解除する"]
+    uc10["ID・パスワードをコピーする"]
+    uc11["古いPWAキャッシュを削除する"]
+  end
+
+  user --> uc1
+  user --> uc2
+  user --> uc3
+  user --> uc4
+  user --> uc5
+  user --> uc6
+  user --> uc7
+  user --> uc8
+  user --> uc9
+  user --> uc10
+  user --> uc11
+  uc10 --> uc9
+```
+
+### 10-2. クラス図
+
+```mermaid
+classDiagram
+  class App {
+    +boot()
+    +bindEvents()
+    +renderEntries()
+    +registerServiceWorker()
+  }
+
+  class AppState {
+    +entries: Entry[]
+    +cryptoKey
+    +toastTimer
+  }
+
+  class Entry {
+    +id: string
+    +companyName: string
+    +companyNormalized: string
+    +selectionStatus: string
+    +preference: string
+    +deadlines: Deadline[]
+    +internshipAt: string
+    +interviewAt: string
+    +mypageUrl: string
+    +memo: string
+    +credentialsEnc: EncryptedPayload
+    +createdAt: string
+    +updatedAt: string
+  }
+
+  class Deadline {
+    +type: string
+    +label: string
+    +at: string
+  }
+
+  class Credential {
+    +loginId: string
+    +password: string
+  }
+
+  class EncryptedPayload {
+    +iv: string
+    +data: string
+  }
+
+  class CryptoMeta {
+    +salt: string
+    +iterations: number
+    +verifier: EncryptedPayload
+  }
+
+  class StorageService {
+    +loadEntries()
+    +saveEntries()
+    +migrateEntry()
+  }
+
+  class CryptoService {
+    +createMasterPassword()
+    +unlockMasterPassword()
+    +encryptText()
+    +decryptText()
+  }
+
+  class UIController {
+    +resetForm()
+    +addDeadlineRow()
+    +collectDeadlines()
+    +showToast()
+    +setNetworkStatus()
+  }
+
+  class LookupService {
+    +handleLookup()
+  }
+
+  class ServiceWorker {
+    +install()
+    +activate()
+    +fetch()
+  }
+
+  App --> AppState
+  AppState "1" --> "*" Entry
+  Entry "1" --> "*" Deadline
+  Entry "0..1" --> EncryptedPayload
+  CryptoMeta --> EncryptedPayload
+  CryptoService --> Credential
+  CryptoService --> EncryptedPayload
+  StorageService --> Entry
+  UIController --> Entry
+  LookupService --> Entry
+  App --> StorageService
+  App --> CryptoService
+  App --> UIController
+  App --> LookupService
+  App --> ServiceWorker
+```
+
+### 10-3. 企業登録のシーケンス図
+
+```mermaid
+sequenceDiagram
+  actor User as 利用者
+  participant UI as 登録フォーム
+  participant App as app.js
+  participant Store as localStorage
+  participant List as 企業一覧
+
+  User->>UI: 社名・選考状況・締切などを入力
+  User->>UI: 「登録する」を押す
+  UI->>App: submitイベント
+  App->>App: 社名必須・重複社名・URL形式を検証
+  alt 入力エラーあり
+    App-->>UI: エラーメッセージを表示
+  else 入力OK
+    App->>App: Entryオブジェクトを作成
+    App->>Store: entriesを保存
+    App->>List: 一覧を再描画
+    App-->>UI: フォームをリセットし、保存完了を表示
+  end
+```
+
+### 10-4. 締切追加のシーケンス図
+
+```mermaid
+sequenceDiagram
+  actor User as 利用者
+  participant Button as 締切を追加ボタン
+  participant App as app.js
+  participant Template as deadlineTemplate
+  participant Area as deadlinesContainer
+
+  User->>Button: 「締切を追加」を押す
+  Button->>App: clickイベント
+  App->>Template: 締切入力行のひな形を取得
+  App->>Area: 入力行を追加
+  App-->>User: 締切入力行が1行増える
+```
+
+### 10-5. 認証情報ロック解除のシーケンス図
+
+```mermaid
+sequenceDiagram
+  actor User as 利用者
+  participant UI as 認証情報ダイアログ
+  participant App as app.js
+  participant Crypto as Web Crypto API
+  participant Store as localStorage
+
+  User->>UI: 「認証情報をロック解除」を押す
+  UI->>App: ダイアログを表示
+  User->>UI: アプリ用パスワードを入力
+  UI->>App: 送信
+  App->>Store: CryptoMetaを取得
+  App->>Crypto: パスワードから鍵を生成
+  App->>Crypto: verifierを復号して確認
+  alt パスワードが正しい
+    App-->>UI: ID・パスワード欄を有効化
+  else パスワードが違う
+    App-->>UI: エラーを表示し、ロック状態を維持
+  end
+```
+
+### 10-6. 企業サイト検索のシーケンス図
+
+```mermaid
+sequenceDiagram
+  actor User as 利用者
+  participant UI as 企業検索欄
+  participant App as app.js
+  participant Store as 登録済み企業一覧
+  participant Browser as ブラウザ
+
+  User->>UI: 社名を入力
+  User->>UI: 「サイトを開く」を押す
+  UI->>App: clickイベント
+  App->>Store: 社名一致の登録済み企業を検索
+  alt 登録済みでマイページURLあり
+    App->>Browser: 保存済みマイページURLを新しいタブで開く
+  else URLなし、または未登録
+    App->>Browser: 「社名 公式サイト」の検索結果を新しいタブで開く
+  end
+```
+
+### 10-7. アプリ全体の状態遷移図
+
+```mermaid
+stateDiagram-v2
+  [*] --> 読み込み中
+  読み込み中 --> 起動済み: app.js起動成功
+  読み込み中 --> 起動エラー: 初期化失敗
+
+  起動済み --> 認証情報ロック中
+  認証情報ロック中 --> 認証情報ロック解除中: 正しいアプリ用パスワード
+  認証情報ロック解除中 --> 認証情報ロック中: ロックボタン押下
+
+  起動済み --> 新規登録中: フォーム入力
+  新規登録中 --> 保存完了: 登録する
+  保存完了 --> 起動済み: 一覧再描画
+
+  起動済み --> 編集中: 編集ボタン押下
+  編集中 --> 保存完了: 更新する
+  編集中 --> 起動済み: 編集をやめる
+
+  起動済み --> 削除確認中: 削除ボタン押下
+  削除確認中 --> 起動済み: キャンセル
+  削除確認中 --> 保存完了: OK
+
+  起動済み --> キャッシュ更新中: reset.htmlを開く
+  キャッシュ更新中 --> 起動済み: 古いキャッシュ削除後に再読み込み
+```
+
+### 10-8. 企業情報の状態遷移図
+
+```mermaid
+stateDiagram-v2
+  [*] --> 未登録
+  未登録 --> 登録済み: 社名を入力して登録
+  登録済み --> 編集中: 編集ボタン押下
+  編集中 --> 登録済み: 更新する
+  編集中 --> 登録済み: 編集をやめる
+  登録済み --> 削除確認中: 削除ボタン押下
+  削除確認中 --> 登録済み: キャンセル
+  削除確認中 --> 削除済み: OK
+  削除済み --> [*]
+```
+
+### 10-9. 選考状況の状態遷移図
+
+```mermaid
+stateDiagram-v2
+  [*] --> 未選択
+  未選択 --> 応募予定
+  応募予定 --> 応募準備中
+  応募準備中 --> 応募済み
+  応募済み --> 書類選考中
+  書類選考中 --> 面接予定
+  面接予定 --> 選考中
+  選考中 --> 合格
+  選考中 --> 不合格
+  選考中 --> 辞退
+  合格 --> 終了
+  不合格 --> 終了
+  辞退 --> 終了
+
+  note right of 未選択
+    選考状況は任意項目のため、
+    未選択のままでも登録できる。
+  end note
+```
+
+
+## 11. テスト結果
 
 v10のテストケース24件を実施した結果、**全件合格（●）**でした。
 
@@ -301,7 +596,7 @@ intern_selection_manager_test_cases_v10.xlsx
 
 ---
 
-## 11. 制約・注意事項
+## 12. 制約・注意事項
 
 - データはブラウザごとに保存されるため、端末間で同期されません。
 - ブラウザの保存領域を削除すると、登録データが消える可能性があります。
